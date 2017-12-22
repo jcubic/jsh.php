@@ -49,20 +49,24 @@ class App {
       }
     }
   }
+  public function utf8($string) {
+    mb_detect_encoding($string);
+  }
   public function command($command, $path, $shell_fn) {
     if (!method_exists($this, $shell_fn)) {
         throw new Exception("Invalid shell '$shell_fn'");
     }
     $marker = 'XXXX' . md5(time());
     if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-      $pre = "@echo off\ncd $path\n";
+      $pre = "@echo off\ncd /D $path\n";
       $post = "\necho '$marker'%cd%";
       $command = $pre . $command . $post;
       $file = fopen("tmp.bat", "w");
       fwrite($file, $command);
       fclose($file);
-      $result = $this->$shell_fn("tmp.bat");
+      $result = preg_replace("/\r/", "", $this->$shell_fn("tmp.bat"));
       $result = sapi_windows_cp_conv(sapi_windows_cp_get('oem'), 65001, $result);
+      
       $output = preg_split("/\n?'".$marker."'/", $result);
       if (count($output) == 2) {
           $cwd = preg_replace("/\n$/", '', $output[1]);
