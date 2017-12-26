@@ -84,7 +84,7 @@ class App {
       $pre = "export HOME=\"$home\"\ncd $path;\n";
       $post = ";echo -n \"$marker\";pwd";
       $command = escapeshellarg($pre . $command . $post);
-      $command = $this->unbuffer($command, $shell_fn);
+      $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
     }
     $result = $this->$shell_fn($command);
     if (preg_match("%>/dev/null & echo $!$%", $command)) {
