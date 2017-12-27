@@ -10,145 +10,145 @@ error_reporting(E_ALL);
 
 // delete if don't want password protection
 $config = array(
-  'password' => 'admin',
-  'root' => getcwd(),
-  'storage' => true
+    'password' => 'admin',
+    'root' => getcwd(),
+    'storage' => true
 );
- 
+
 class App {
-  function __construct($root, $path) {
-    $this->root = $root;
-    $this->path = $path;
-  }
-  private function shell_exec($code) {
-    return shell_exec($code);
-  }
-  // ------------------------------------------------------------------------
-  private function exec($code) {
-    exec($code, $result);
-    return implode("\n", $result);
-  }
-  // ------------------------------------------------------------------------
-  public function system($code) {
-    ob_start();
-    system($code);
-    $result = ob_get_contents();
-    ob_end_clean();
-    return $result;
-  }
-  // ------------------------------------------------------------------------
-  private function unbuffer($command, $shell_fn) {
-    if (preg_match("/which unbuffer/", $command)) {
-      return $command;
-    } else {
-      $path = preg_replace("/\s$/", "", $this->$shell_fn("which unbuffer"));
-      if (empty($path)) {
-        return $command;
-      } else {
-        return $path . " " . $command;
-      }
+    function __construct($root, $path) {
+        $this->root = $root;
+        $this->path = $path;
     }
-  }
-  public function utf8($string) {
-    mb_detect_encoding($string);
-  }
-  public function command($command, $path, $shell_fn) {
-    if (!method_exists($this, $shell_fn)) {
-        throw new Exception("Invalid shell '$shell_fn'");
+    private function shell_exec($code) {
+        return shell_exec($code);
     }
-    $marker = 'XXXX' . md5(time());
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-      $pre = "@echo off\ncd /D $path\n";
-      $post = "\necho '$marker'%cd%";
-      $command = $pre . $command . $post;
-      $file = fopen("tmp.bat", "w");
-      fwrite($file, $command);
-      fclose($file);
-      $result = preg_replace("/\r/", "", $this->$shell_fn("tmp.bat"));
-      $result = sapi_windows_cp_conv(sapi_windows_cp_get('oem'), 65001, $result);
-      
-      $output = preg_split("/\n?'".$marker."'/", $result);
-      if (count($output) == 2) {
-          $cwd = preg_replace("/\n$/", '', $output[1]);
-      } else {
-          $cwd = $path;
-      }
-      return array(
-          'output' => $output[0],
-          'cwd' => $cwd
-      );
-    } else {
-      $command = preg_replace("/&\s*$/", ' >/dev/null & echo $!', $command);
-      $home = $this->root;
-      $cmd_path = __DIR__;
-      $pre = "export HOME=\"$home\"\ncd $path;\n";
-      $post = ";echo -n \"$marker\";pwd";
-      $command = escapeshellarg($pre . $command . $post);
-      $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
+    // ------------------------------------------------------------------------
+    private function exec($code) {
+        exec($code, $result);
+        return implode("\n", $result);
     }
-    $result = $this->$shell_fn($command);
-    if (preg_match("%>/dev/null & echo $!$%", $command)) {
-        return array(
-            'output' => '[1] ' . $result,
-            'cwd' => $path
-        );
-    } else if ($result) {
-        // work wth `set` that return BASH_EXECUTION_STRING
-        $output = preg_split('/'.$marker.'(?!")/', $result);
-        if (count($output) == 2) {
-            $cwd = preg_replace("/\n$/", '', $output[1]);
+    // ------------------------------------------------------------------------
+    public function system($code) {
+        ob_start();
+        system($code);
+        $result = ob_get_contents();
+        ob_end_clean();
+        return $result;
+    }
+    // ------------------------------------------------------------------------
+    private function unbuffer($command, $shell_fn) {
+        if (preg_match("/which unbuffer/", $command)) {
+            return $command;
         } else {
-            $cwd = $path;
+            $path = preg_replace("/\s$/", "", $this->$shell_fn("which unbuffer"));
+            if (empty($path)) {
+                return $command;
+            } else {
+                return $path . " " . $command;
+            }
         }
-        return array(
+    }
+    public function utf8($string) {
+        mb_detect_encoding($string);
+    }
+    public function command($command, $path, $shell_fn) {
+        if (!method_exists($this, $shell_fn)) {
+            throw new Exception("Invalid shell '$shell_fn'");
+        }
+        $marker = 'XXXX' . md5(time());
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            $pre = "@echo off\ncd /D $path\n";
+            $post = "\necho '$marker'%cd%";
+            $command = $pre . $command . $post;
+            $file_name = "tmp.bat";
+            $file = fopen($file_name, "w");
+            fwrite($file, $command);
+            fclose($file);
+            $result = preg_replace("/\r/", "", $this->$shell_fn($file_name));
+            unlink($file_name);
+            $result = sapi_windows_cp_conv(sapi_windows_cp_get('oem'), 65001, $result);
+            $output = preg_split("/\n?'".$marker."'/", $result);
+            if (count($output) == 2) {
+                $cwd = preg_replace("/\n$/", '', $output[1]);
+            } else {
+                $cwd = $path;
+            }
+            return array(
+                'output' => $output[0],
+                'cwd' => $cwd
+            );
+        }
+        $command = preg_replace("/&\s*$/", ' >/dev/null & echo $!', $command);
+        $home = $this->root;
+        $cmd_path = __DIR__;
+        $pre = "export HOME=\"$home\"\ncd $path;\n";
+        $post = ";echo -n \"$marker\";pwd";
+        $command = escapeshellarg($pre . $command . $post);
+        $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
+        $result = $this->$shell_fn($command);
+        if (preg_match("%>/dev/null & echo $!$%", $command)) {
+            return array(
+                'output' => '[1] ' . $result,
+                'cwd' => $path
+            );
+        } else if ($result) {
+            // work wth `set` that return BASH_EXECUTION_STRING
+            $output = preg_split('/'.$marker.'(?!")/', $result);
+            if (count($output) == 2) {
+                $cwd = preg_replace("/\n$/", '', $output[1]);
+            } else {
+                $cwd = $path;
+            }
+            return array(
             'output' => preg_replace("/" . preg_quote($post) . "/", "", $output[0]),
             'cwd' => $cwd
-        );
-    } else {
+            );
+        } else {
         throw new Exception("Internal error, shell function give no result");
+        }
     }
-  }
-  public function shell($code) {
-    $shells = array('system', 'exec', 'shell_exec');
-    foreach ($shells as $shell) {
-      if (function_exists($shell)) {
-        return $this->command($code, $this->path, $shell);
-      }
+    public function shell($code) {
+        $shells = array('system', 'exec', 'shell_exec');
+        foreach ($shells as $shell) {
+            if (function_exists($shell)) {
+                return $this->command($code, $this->path, $shell);
+            }
+        }
+        throw new Exception("No valid shell found");
     }
-    throw new Exception("No valid shell found");
-  }
 }
 
 function token() {
-  $time = array_sum(explode(' ', microtime()));
-  return sha1($time) . substr(md5($time), 4);
+    $time = array_sum(explode(' ', microtime()));
+    return sha1($time) . substr(md5($time), 4);
 }
 session_start();
 if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
     $_SERVER['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest' && isset($_POST['action'])) {
-  $app = new App($config['root'], isset($_POST['path']) ? $_POST['path'] : $config['root']);
-  header('Content-Type: application/json');
-  if ($_POST['action'] != 'login' && isset($config['password']) && !$_SESSION['token']) {
-    echo json_encode(array('error' => "Error no Token"));
-  } if ($_POST['action'] == 'login') {
-    if ($_POST['password'] == $config['password']) {
-      $_SESSION['token'] = token();
-      echo json_encode(array("result" => $_SESSION['token']));
-    } else {
-      echo json_encode(array("error" => "Wrong password"));
+    $app = new App($config['root'], isset($_POST['path']) ? $_POST['path'] : $config['root']);
+    header('Content-Type: application/json');
+    if ($_POST['action'] != 'login' && isset($config['password']) && !$_SESSION['token']) {
+        echo json_encode(array('error' => "Error no Token"));
+    } if ($_POST['action'] == 'login') {
+        if ($_POST['password'] == $config['password']) {
+            $_SESSION['token'] = token();
+            echo json_encode(array("result" => $_SESSION['token']));
+        } else {
+            echo json_encode(array("error" => "Wrong password"));
+        }
+    } else if (isset($config['password']) &&
+               (isset($_SESSION['token']) && $_SESSION['token'] == $_POST['token']) ||
+               !isset($config['password'])) {
+        if ($_POST['action'] == 'shell') {
+            try {
+                echo json_encode($app->shell($_POST['cmd']));
+            } catch(Exception $e) {
+                echo json_encode(array("error" => $e->getMessage()));
+            }
+        }
     }
-  } else if (isset($config['password']) &&
-             (isset($_SESSION['token']) && $_SESSION['token'] == $_POST['token']) ||
-             !isset($config['password'])) {
-    if ($_POST['action'] == 'shell') {
-      try {
-        echo json_encode($app->shell($_POST['cmd']));
-      } catch(Exception $e) {
-        echo json_encode(array("error" => $e->getMessage()));
-      }
-    }
-  }
-  exit();
+    exit();
 }
 
 
