@@ -101,11 +101,11 @@ class App {
                 $cwd = $path;
             }
             return array(
-            'output' => preg_replace("/" . preg_quote($post) . "/", "", $output[0]),
-            'cwd' => $cwd
+                'output' => preg_replace("/" . preg_quote($post) . "/", "", $output[0]),
+                'cwd' => $cwd
             );
         } else {
-        throw new Exception("Internal error, shell function give no result");
+            throw new Exception("Internal error, shell function give no result");
         }
     }
     public function shell($code) {
@@ -172,7 +172,7 @@ body {
 <body>
 <script>
 $(function() {
-  var config = <?= json_encode(array_merge($config, array('password' => isset($config['password'])))) ?>;
+  var config = <?= json_encode(array_merge($config, array('password' => isset($config['password']) && $config['password'] != ''))) ?>;
   var cwd = config.root;
   function init(term, token) {
     term.set_mask(false).push(function(cmd) {
