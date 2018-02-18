@@ -135,7 +135,7 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
     $_SERVER['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest' && isset($_POST['action'])) {
     $app = new App($config['root'], isset($_POST['path']) ? $_POST['path'] : $config['root']);
     header('Content-Type: application/json');
-    if ($_POST['action'] != 'login' && isset($config['password']) && !$_SESSION['token']) {
+    if ($_POST['action'] != 'login' && password_set() && !isset($_SESSION['token'])) {
         echo json_encode(array('error' => "Error no Token"));
     } if ($_POST['action'] == 'login') {
         if ($_POST['password'] == $config['password']) {
@@ -145,7 +145,8 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
             echo json_encode(array("error" => "Wrong password"));
         }
     } else if (password_set() &&
-               (isset($_SESSION['token']) && $_SESSION['token'] == $_POST['token']) ||
+               (isset($_SESSION['token']) && isset($_POST['token']) &&
+                $_SESSION['token'] == $_POST['token']) ||
                !password_set()) {
         if ($_POST['action'] == 'shell') {
             try {
