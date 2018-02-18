@@ -1,6 +1,9 @@
 <?php
 /*
- * Terminal Like php shell
+ * Single file, terminal like php shell
+ *
+ * https://github.com/jcubic/jsh.php
+ *
  * Copyright (c) 2017-2018 Jakub Jankiewicz <http://jcubic.pl/me>
  * Released under the MIT license
  */
@@ -8,7 +11,7 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// delete if don't want password protection
+// leave blank or delete if don't want password protection
 $config = array(
     'password' => 'admin',
     'root' => getcwd(),
@@ -75,7 +78,7 @@ class App {
                 $cwd = $path;
             }
             return array(
-                'output' => $output[0],
+                'output' => preg_replace("/\n$/", "", $output[0]),
                 'cwd' => $cwd
             );
         }
@@ -100,6 +103,7 @@ class App {
             } else {
                 $cwd = $path;
             }
+            $output[0] = preg_replace("/\n$/", "", $output[0]);
             return array(
                 'output' => preg_replace("/" . preg_quote($post) . "/", "", $output[0]),
                 'cwd' => $cwd
