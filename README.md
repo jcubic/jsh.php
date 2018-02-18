@@ -1,6 +1,10 @@
-## jsh.php
-Terminal like php shell
+### jsh.php
 
-## License
+Single file, terminal like php shell
 
-MIT
+### License
+
+Relased under [MIT](http://opensource.org/licenses/MIT) license
+
+Copyright (c) 2017-2018 [Jakub Jankiewicz](http://jcubic.pl/jakub-jankiewicz)
+

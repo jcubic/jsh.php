@@ -1,7 +1,7 @@
 <?php
 /*
  * Terminal Like php shell
- * Copyright (c) 2017 Jakub Jankiewicz <http://jcubic.pl/me>
+ * Copyright (c) 2017-2018 Jakub Jankiewicz <http://jcubic.pl/me>
  * Released under the MIT license
  */
 ini_set('display_errors', 1);
@@ -123,6 +123,9 @@ function token() {
     $time = array_sum(explode(' ', microtime()));
     return sha1($time) . substr(md5($time), 4);
 }
+function password_set() {
+    return isset($config['password']) && $config['password'] != '';
+}
 session_start();
 if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
     $_SERVER['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest' && isset($_POST['action'])) {
@@ -137,9 +140,9 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
         } else {
             echo json_encode(array("error" => "Wrong password"));
         }
-    } else if (isset($config['password']) &&
+    } else if (password_set() &&
                (isset($_SESSION['token']) && $_SESSION['token'] == $_POST['token']) ||
-               !isset($config['password'])) {
+               !password_set()) {
         if ($_POST['action'] == 'shell') {
             try {
                 echo json_encode($app->shell($_POST['cmd']));
