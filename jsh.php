@@ -1,12 +1,13 @@
 <?php
 /*
- * Single file, terminal like php shell version pre-0.2
+ * Single file, terminal like php shell version 0.2.0
  *
  * https://github.com/jcubic/jsh.php
  *
- * Copyright (c) 2017-2018 Jakub Jankiewicz <http://jcubic.pl/me>
+ * Copyright (c) 2017-2018 Jakub Jankiewicz <https://jcubic.pl/me>
  * Released under the MIT license
  */
+define('VERSION', '0.2.0');
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE);
@@ -822,7 +823,7 @@ body {
                  $.terminal.defaults.formatters = last;
              }
          },
-         greetings: 'jsh shell',
+         greetings: 'jsh shell v. <?= VERSION ?>',
          prompt: 'password: ',
          onInit: function(term) {
              term.set_mask(true);

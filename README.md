@@ -1,10 +1,27 @@
-### jsh.php
+## jsh.php version 0.2.0
 
 Single file, terminal like php shell
 
-### License
+## Features
 
-Relased under [MIT](http://opensource.org/licenses/MIT) license
+sqlite, mysql command with syntax highlight and tab completion
 
-Copyright (c) 2017-2018 [Jakub Jankiewicz](http://jcubic.pl/jakub-jankiewicz)
+## Limitations
+
+* Windows support is limited, you can run shell commands but it run normal cmd process (no powershell)
+* tab completion work for commands in the system works only on Unix systems (compgen required) and it may
+  trigger SELinux warning/error use with caution.
+
+## Changelog
+
+### 0.2.0
+* sqlite and mysql commands
+* completion
+* first tag
+
+## License
+
+Released under [MIT](http://opensource.org/licenses/MIT) license
+
+Copyright (c) 2017-2018 [Jakub Jankiewicz](https://jcubic.pl/jakub-jankiewicz)
 
