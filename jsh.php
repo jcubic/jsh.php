@@ -1,6 +1,6 @@
 <?php
 /*
- * Single file, terminal like php shell
+ * Single file, terminal like php shell version pre-0.2
  *
  * https://github.com/jcubic/jsh.php
  *
@@ -15,11 +15,13 @@ error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE);
 $config = array(
     'password' => 'admin',
     'root' => getcwd(),
-    'storage' => true
+    'storage' => true,
+    'is_windows' => strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'
 );
 
 class App {
-    function __construct($root, $path) {
+    function __construct($root, $path, $config) {
+        $this->config = (object)$config;
         $this->root = $root;
         $this->path = $path;
     }
@@ -67,6 +69,21 @@ class App {
         return $resource_id;
     }
     // ------------------------------------------------------------------------
+    public function sqlite_query($filename, $query) {
+        $db = new PDO('sqlite:' . $filename);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $res = $db->query($query);
+        if ($res) {
+            if (preg_match("/^\s*INSERT|UPDATE|DELETE|ALTER|CREATE|DROP/i", $query)) {
+                return $res->rowCount();
+            } else {
+                return $res->fetchAll(PDO::FETCH_ASSOC);
+            }
+        } else {
+            throw new Exception("Coudn't open file");
+        }
+    }
+    // ------------------------------------------------------------------------
     public function mysql_query($resource_id, $query) {
         if (!isset($_SESSION['mysql'])) {
             throw new Exception("Not mysql sessions found");
@@ -112,7 +129,7 @@ class App {
             throw new Exception("Invalid shell '$shell_fn'");
         }
         $marker = 'XXXX' . md5(time());
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        if ($this->config->is_windows) {
             $pre = "@echo off\ncd /D $path\n";
             $post = "\necho '$marker'%cd%";
             $command = $pre . $command . $post;
@@ -137,7 +154,7 @@ class App {
         $command = preg_replace("/&\s*$/", ' >/dev/null & echo $!', $command);
         $home = $this->root;
         $cmd_path = __DIR__;
-        $pre = "export HOME=\"$home\"\ncd $path;\n";
+        $pre = ". .bashrc\nexport HOME=\"$home\"\ncd $path;\n";
         $post = ";echo -n \"$marker\";pwd";
         $command = escapeshellarg($pre . $command . $post);
         $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
@@ -165,6 +182,53 @@ class App {
         }
     }
     // ------------------------------------------------------------------------
+    public function dir($path) {
+        // using shell since php can restric to read files from specific directories
+        $EXEC = 'X';
+        $DIR = 'D';
+        $FILE = 'F';
+        // depend on GNU version of find (not tested on different versions)
+        $cmd = "find . -mindepth 1 -maxdepth 1 \\( -type f -executable -printf ".
+               "'$EXEC%p\\0' \\)  -o -type d -printf '$DIR%p\\0' -o \\( -type l -x".
+               "type d -printf '$DIR%p\\0' \\) -o -not -type d -printf '$FILE%p\\0'";
+        $this->path = $path;
+        $result = $this->shell($cmd);
+        $files = array();
+        $dirs = array();
+        $execs = array();
+        foreach (explode("\x0", $result['output']) as $item) {
+            if ($item != "") {
+                $mnemonic = substr($item, 0, 1);
+                $item = substr($item, 3); // remove `<MENEMONIC>./'
+                switch ($mnemonic) {
+                    case $EXEC:
+                        $execs[] = $item; // executables are also files
+                    case $FILE:
+                        $files[] = $item;
+                        break;
+                    case $DIR:
+                        $dirs[] = $item;
+                }
+            }
+        }
+        return array(
+            'files' => $files,
+            'dirs' => $dirs,
+            'execs' => $execs
+        );
+    }
+    // ------------------------------------------------------------------------
+    public function executables() {
+        if (!$this->config->is_windows) {
+            $command = "compgen -A function -abck | sort | uniq";
+            $result = $this->shell($command);
+            $commands = explode("\n", trim($result['output']));
+            return array_values(array_filter($commands, function($command) {
+                return strlen($command) > 1; // filter out . : [
+            }));
+        }
+    }
+    // ------------------------------------------------------------------------
     public function shell($code) {
         $shells = array('system', 'exec', 'shell_exec');
         foreach ($shells as $shell) {
@@ -187,7 +251,36 @@ function password_set() {
 session_start();
 if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
     $_SERVER['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest' && isset($_POST['action'])) {
-    $app = new App($config['root'], isset($_POST['path']) ? $_POST['path'] : $config['root']);
+    $path = isset($_POST['path']) ? $_POST['path'] : $config['root'];
+    if (!file_exists('.bashrc')) {
+        $bashrc = <<<EOF
+shopt -s expand_aliases
+
+# man output formatting
+export MAN_KEEP_FORMATTING=1
+export PATH=\$PATH:/usr/games
+export TERM="xterm-256" #force colors for dircolors
+alias grep="grep --color=always"
+
+if [ -x /usr/bin/dircolors ]; then
+    #Nice colors
+    eval "`dircolors -b`"
+    alias ls="ls --color=always"
+fi
+EOF;
+        $f = fopen('.bashrc', 'w');
+        fwrite($f, $bashrc);
+        fclose($f);
+    }
+
+    $app = new App($config['root'], $path, $config);
+
+    try {
+        $config['executables'] = @$app->executables();
+    } catch(Exception $e) {
+        $config->executables = array();
+    }
+
     header('Content-Type: application/json');
     if ($_POST['action'] != 'login' && password_set() && !isset($_SESSION['token'])) {
         echo json_encode(array('error' => "Error no Token"));
@@ -301,6 +394,102 @@ body {
              }
              term.resume();
          }
+         // -------------------------------------------------------------------------
+         function sql_formatter(keywords, tables, color) {
+             var tables_re = new RegExp('^' + tables.map($.terminal.escape_regex).join('|') + '$', 'i');
+             var keywords_re = new RegExp('^' + keywords.join('|') + '$', 'i');
+             return function(string) {
+                 return string.split(/((?:\s|&nbsp;|\)|\()+)/).map(function(string) {
+                     if (tables_re.test(string)) {
+                         return '[[u;;]' + string + ']';
+                     } else if (keywords_re.test(string)) {
+                         return '[[b;' + color + ';]' + string + ']';
+                     } else {
+                         return string;
+                     }
+                 }).join('');
+             };
+         }
+         // -------------------------------------------------------------------------
+         function mysql_keywords() {
+             // mysql keywords from
+             // http://dev.mysql.com/doc/refman/5.1/en/reserved-words.html
+             var uppercase = [
+                 'ACCESSIBLE', 'ADD', 'ALL', 'ALTER', 'ANALYZE', 'AND', 'AS', 'ASC',
+                 'ASENSITIVE', 'BEFORE', 'BETWEEN', 'BIGINT', 'BINARY', 'BLOB',
+                 'BOTH', 'BY', 'CALL', 'CASCADE', 'CASE', 'CHANGE', 'CHAR',
+                 'CHARACTER', 'CHECK', 'COLLATE', 'COLUMN', 'CONDITION',
+                 'CONSTRAINT', 'CONTINUE', 'CONVERT', 'CREATE', 'CROSS',
+                 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'CURRENT_USER',
+                 'CURSOR', 'DATABASE', 'DATABASES', 'DAY_HOUR', 'DAY_MICROSECOND',
+                 'DAY_MINUTE', 'DAY_SECOND', 'DEC', 'DECIMAL', 'DECLARE', 'DEFAULT',
+                 'DELAYED', 'DELETE', 'DESC', 'DESCRIBE', 'DETERMINISTIC',
+                 'DISTINCT', 'DISTINCTROW', 'DIV', 'DOUBLE', 'DROP', 'DUAL', 'EACH',
+                 'ELSE', 'ELSEIF', 'ENCLOSED', 'ESCAPED', 'EXISTS', 'EXIT',
+                 'EXPLAIN', 'FALSE', 'FETCH', 'FLOAT', 'FLOAT4', 'FLOAT8', 'FOR',
+                 'FORCE', 'FOREIGN', 'FROM', 'FULLTEXT', 'GRANT', 'GROUP', 'HAVING',
+                 'HIGH_PRIORITY', 'HOUR_MICROSECOND', 'HOUR_MINUTE', 'HOUR_SECOND',
+                 'IF', 'IGNORE', 'IN', 'INDEX', 'INFILE', 'INNER', 'INOUT',
+                 'INSENSITIVE', 'INSERT', 'INT', 'INT1', 'INT2', 'INT3', 'INT4',
+                 'INT8', 'INTEGER', 'INTERVAL', 'INTO', 'IS', 'ITERATE', 'JOIN',
+                 'KEY', 'KEYS', 'KILL', 'LEADING', 'LEAVE', 'LEFT', 'LIKE', 'LIMIT',
+                 'LINEAR', 'LINES', 'LOAD', 'LOCALTIME', 'LOCALTIMESTAMP', 'LOCK',
+                 'LONG', 'LONGBLOB', 'LONGTEXT', 'LOOP', 'LOW_PRIORITY',
+                 'MASTER_SSL_VERIFY_SERVER_CERT', 'MATCH', 'MEDIUMBLOB', 'MEDIUMINT',
+                 'MEDIUMTEXT', 'MIDDLEINT', 'MINUTE_MICROSECOND', 'MINUTE_SECOND',
+                 'MOD', 'MODIFIES', 'NATURAL', 'NOT', 'NO_WRITE_TO_BINLOG', 'NULL',
+                 'NUMERIC', 'ON', 'OPTIMIZE', 'OPTION', 'OPTIONALLY', 'OR', 'ORDER',
+                 'OUT', 'OUTER', 'OUTFILE', 'PRECISION', 'PRIMARY', 'PROCEDURE',
+                 'PURGE', 'RANGE', 'READ', 'READS', 'READ_WRITE', 'REAL',
+                 'REFERENCES', 'REGEXP', 'RELEASE', 'RENAME', 'REPEAT', 'REPLACE',
+                 'REQUIRE', 'RESTRICT', 'RETURN', 'REVOKE', 'RIGHT', 'RLIKE',
+                 'SCHEMA', 'SCHEMAS', 'SECOND_MICROSECOND', 'SELECT', 'SENSITIVE',
+                 'SEPARATOR', 'SET', 'SHOW', 'SMALLINT', 'SPATIAL', 'SPECIFIC',
+                 'SQL', 'SQLEXCEPTION', 'SQLSTATE', 'SQLWARNING', 'SQL_BIG_RESULT',
+                 'SQL_CALC_FOUND_ROWS', 'SQL_SMALL_RESULT', 'SSL', 'STARTING',
+                 'STRAIGHT_JOIN', 'TABLE', 'TERMINATED', 'THEN', 'TINYBLOB',
+                 'TINYINT', 'TINYTEXT', 'TO', 'TRAILING', 'TRIGGER', 'TRUE', 'UNDO',
+                 'UNION', 'UNIQUE', 'UNLOCK', 'UNSIGNED', 'UPDATE', 'USAGE', 'USE',
+                 'USING', 'UTC_DATE', 'UTC_TIME', 'UTC_TIMESTAMP', 'VALUES',
+                 'VARBINARY', 'VARCHAR', 'VARCHARACTER', 'VARYING', 'WHEN', 'WHERE',
+                 'WHILE', 'WITH', 'WRITE', 'XOR', 'YEAR_MONTH', 'ZEROFILL'];
+             return uppercase;
+         }
+         // -------------------------------------------------------------------------
+         function sqlite_keywords() {
+             // sqlite keywords taken from
+             // https://www.sqlite.org/lang_keywords.html
+             var uppercase = [
+                 'ABORT', 'ACTION', 'ADD', 'AFTER', 'ALL', 'ALTER', 'ANALYZE', 'AND',
+                 'AS', 'ASC', 'ATTACH', 'AUTOINCREMENT', 'BEFORE', 'BEGIN',
+                 'BETWEEN', 'BY', 'CASCADE', 'CASE', 'CAST', 'CHECK', 'COLLATE',
+                 'COLUMN', 'COMMIT', 'CONFLICT', 'CONSTRAINT', 'CREATE', 'CROSS',
+                 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'DATABASE',
+                 'DEFAULT', 'DEFERRABLE', 'DEFERRED', 'DELETE', 'DESC', 'DETACH',
+                 'DISTINCT', 'DROP', 'EACH', 'ELSE', 'END', 'ESCAPE', 'EXCEPT',
+                 'EXCLUSIVE', 'EXISTS', 'EXPLAIN', 'FAIL', 'FOR', 'FOREIGN', 'FROM',
+                 'FULL', 'GLOB', 'GROUP', 'HAVING', 'IF', 'IGNORE', 'IMMEDIATE',
+                 'IN', 'INDEX', 'INDEXED', 'INITIALLY', 'INNER', 'INSERT', 'INSTEAD',
+                 'INTERSECT', 'INTO', 'IS', 'ISNULL', 'JOIN', 'KEY', 'LEFT', 'LIKE',
+                 'LIMIT', 'MATCH', 'NATURAL', 'NO', 'NOT', 'NOTNULL', 'NULL', 'OF',
+                 'OFFSET', 'ON', 'OR', 'ORDER', 'OUTER', 'PLAN', 'PRAGMA', 'PRIMARY',
+                 'QUERY', 'RAISE', 'RECURSIVE', 'REFERENCES', 'REGEXP', 'REINDEX',
+                 'RELEASE', 'RENAME', 'REPLACE', 'RESTRICT', 'RIGHT', 'ROLLBACK',
+                 'ROW', 'SAVEPOINT', 'SELECT', 'SET', 'TABLE', 'TEMP', 'TEMPORARY',
+                 'THEN', 'TO', 'TRANSACTION', 'TRIGGER', 'UNION', 'UNIQUE', 'UPDATE',
+                 'USING', 'VACUUM', 'VALUES', 'VIEW', 'VIRTUAL', 'WHEN', 'WHERE',
+                 'WITH', 'WITHOUT'];
+             return uppercase;
+         }
+         // ----------------------------------------------------------------------------------------
+         function values(arr) {
+             var keys = Object.keys(arr[0]);
+             return arr.map(function(row) {
+                 return Object.keys(row).map(function(key) {
+                     return row[key];
+                 });
+             });
+         }
          // ----------------------------------------------------------------------------------------
          function mysql(user, password, db, host) {
              var params = [user, password, db];
@@ -316,16 +505,20 @@ body {
                      rpc('mysql_close', [id]);
                  }
              }
-             rpc('mysql_connect', params).then(function(id) {
-                 if (config.storage) {
-                     $.Storage.set('mysql_connection', id);
-                 }
+             var prompt = '[[b;#55f;]mysql]> ';
+             function push(id, tables) {
+                 tables = values(tables).map(function(row) {
+                     return row[0];
+                 });
+                 var keywords = mysql_keywords();
                  term.resume().push(function(query) {
                      term.pause();
                      rpc('mysql_query', [id, query]).then(sql_result);
                  }, {
                      name: 'mysql',
-                     prompt: 'mysql> ',
+                     prompt: prompt,
+                     completion: keywords.concat(tables),
+                     formatters: [sql_formatter(keywords, tables, 'white')],
                      onExit: function() {
                          if (config.storage) {
                              $.Storage.remove('mysql_connection');
@@ -333,7 +526,41 @@ body {
                          rpc('mysql_close', [id]);
                      }
                  });
+             }
+             rpc('mysql_connect', params).then(function(id) {
+                 if (config.storage) {
+                     $.Storage.set('mysql_connection', id);
+                 }
+                 rpc('mysql_query', [id, 'show tables']).then(push.bind(null, id));
              });
+         }
+         // ----------------------------------------------------------------------------------------
+         function sqlite(filename) {
+             var query = 'SELECT name FROM sqlite_master WHERE type = "table"';
+             var keywords = sqlite_keywords();
+             var prompt = '[[b;#55f;]sqlite]> ';
+             function push(tables) {
+                 tables = values(tables).map(function(row) {
+                     return row[0];
+                 });
+                 term.push(function(query) {
+                     if (query.match(/^\s*help\s*$/)) {
+                         term.echo('show tables:\n\tSELECT name FROM sqlite_m'+
+                                   'aster WHERE type = "table"\ndescribe tabl'+
+                                   'e:\n\tPRAGMA table_info([TABLE NAME])');
+                     } else {
+                         term.pause();
+                         rpc('sqlite_query', [filename, query]).then(sql_result);
+                     }
+                 }, {
+                     name: 'sqlite',
+                     prompt: prompt,
+                     completion: ['help'].concat(keywords).concat(tables),
+                     formatters: [sql_formatter(keywords, tables, 'white')]
+                 }).resume();
+             }
+             term.pause();
+             rpc('sqlite_query', [filename, query]).then(push);
          }
          // ----------------------------------------------------------------------------------------
          function rpc(method, params) {
@@ -364,10 +591,17 @@ body {
              }, 'text');
              return defer.promise();
          }
+         var dir;
          // ----------------------------------------------------------------------------------------
-         term.set_mask(false).push(function(command) {
-             var cmd = $.terminal.parse_command(command);
-             if (cmd.name == 'mysql') {
+         function refresh_dir() {
+             return rpc('dir', [cwd]).then(function(result) {
+                 dir = result;
+                 return result;
+             });
+         }
+         // ----------------------------------------------------------------------------------------
+         var commands = {
+             mysql: function(cmd) {
                  var password;
                  cmd.args = cmd.args.filter(function(arg) {
                      var m = arg.match(/^-p(.+)/);
@@ -395,7 +629,21 @@ body {
                  } else {
                      term.echo('usage: mysql -u <USER> -p<PASSWORD> -h <HOST> <DB NAME>');
                  }
-             } else if (cmd.name == 'rpc') {
+             },
+             sqlite: function(cmd) {
+                 if (cmd.args.length === 1) {
+                     var fname;
+                     if (cmd.args[0].match(/^\//)) {
+                         fname = cmd.args[0];
+                     } else {
+                         fname = cwd + '/' + cmd.args[0];
+                     }
+                     sqlite(fname);
+                 } else {
+                     term.echo('sqlite <FILENAME>');
+                 }
+             },
+             rpc: function(cmd) {
                  term.pause();
                  rpc('system.describe').then(function(data) {
                      if (data.error) {
@@ -413,41 +661,129 @@ body {
                          }, {
                              completion: data.result.map(function(method) { return method.name; }),
                              name: 'rpc',
-                             prompt: 'rpc> '
+                             prompt: '[[;#D72424;]rpc]> '
                          });
                      }
                      term.resume();
                  });
-             } else {
-                 var payload = {cmd: command, action: 'shell', path: cwd};
-                 if (config.password) {
-                     if (token) {
-                         payload.token = token;
+             }
+         };
+         // ----------------------------------------------------------------------------------------
+         function shell(command) {
+             var payload = {cmd: command, action: 'shell', path: cwd};
+             if (config.password) {
+                 if (token) {
+                     payload.token = token;
+                 } else {
+                     term.error('no token');
+                     return;
+                 }
+             }
+             return $.post('', payload);
+         }
+         var builtins = Object.keys(commands);
+         // ----------------------------------------------------------------------------------------
+         (function(push) {
+             refresh_dir().then(push);
+         })(function() {
+             term.set_mask(false).push(function(command) {
+                 var cmd = $.terminal.parse_command(command);
+                 console.log(cmd);
+                 if (typeof commands[cmd.name] == 'function') {
+                     commands[cmd.name](cmd);
+                 } else {
+                     term.pause();
+                     shell(command).then(function(data) {
+                         if (data.error) {
+                             term.error(data.error).resume();
+                         } else {
+                             term.echo(data.output.trim());
+                             cwd = data.cwd;
+                             refresh_dir().then(term.resume);
+                         }
+                     });
+                 }
+             }, {
+                 prompt: function(set) {
+                     set(cwd + '# ');
+                 },
+                 onExit: function() {
+                     $.Storage.remove('token');
+                 },
+                 completion: function(string, callback) {
+                     var command = this.get_command();
+                     var re = new RegExp('^\\s*' + $.terminal.escape_regex(string));
+                     var cmd = $.terminal.parse_command(command);
+                     function dirs_slash(dir) {
+                         return (dir.dirs || []).map(function(dir) {
+                             return dir + '/';
+                         });
+                     }
+                     function fix_spaces(array) {
+                         if (string.match(/^"/)) {
+                             return array.map(function(item) {
+                                 return '"' + item;
+                             });
+                         } else {
+                             return array.map(function(item) {
+                                 return item.replace(/([() ])/g, '\\$1');
+                             });
+                         }
+                     }
+                     if (!config.is_windows) {
+                         var execs = dir.execs.concat(config.executables);
+                         if (string.match(/^\$/)) {
+                             shell('env').then(function(result) {
+                                 callback(result.output.split('\n').map(function(pair) {
+                                     return '$' + pair.split(/=/)[0];
+                                 }));
+                             });
+                         } else if (command.match(re) || command === '') {
+                             var commands = Object.keys(leash.commands);
+                             callback(builtins.concat(execs));
+                         } else {
+                             var m = string.match(/(.*)\/([^\/]+)/);
+                             var is_dir_command = cmd.name == 'cd';
+                             var path;
+                             if (is_dir_command) {
+                                 if (m) {
+                                     path = cwd + '/' + m[1];
+                                     rpc('dir', [path]).then(function(result) {
+                                         var dirs = (result.dirs || []).map(function(dir) {
+                                             return m[1] + '/' + dir + '/';
+                                         });
+                                         callback(dirs);
+                                     });
+                                 } else {
+                                     callback(dirs_slash(dir));
+                                 }
+                             } else {
+                                 // file command
+                                 if (m) {
+                                     path = cwd + '/' + m[1];
+                                     rpc('dir', [path]).then(function(result) {
+                                         var dirs = dirs_slash(result);
+                                         var dirs_files = (result.files || [])
+                                             .concat(dirs).map(function(file_dir) {
+                                                 return m[1] + '/' + file_dir;
+                                             });
+                                         callback(dirs_files);
+                                     });
+                                 } else {
+                                     var dirs_files = (dir.files || []).concat(dirs_slash(dir));
+                                     callback(dirs_files);
+                                 }
+                             }
+                         }
                      } else {
-                         term.error('no token');
-                         return;
+                         callback([]);
                      }
                  }
-                 term.pause();
-                 $.post('', payload).then(function(data) {
-                     if (data.error) {
-                         term.error(data.error);
-                     } else {
-                         term.echo(data.output.trim());
-                         cwd = data.cwd;
-                     }
-                     term.resume();
-                 });
-             }
-         }, {
-             prompt: function(set) {
-                 set(cwd + '# ');
-             },
-             onExit: function() {
-                 $.Storage.remove('token');
-             }
+             });
          });
      }
+     var init_formatters = $.terminal.defaults.formatters;
+     var formatters_stack = [init_formatters];
      // --------------------------------------------------------------------------------------------
      $('body').terminal(function(password, term) {
          term.pause();
@@ -463,6 +799,21 @@ body {
              term.resume();
          });
      }, {
+         extra: {
+             formatters: init_formatters
+         },
+         onPush: function(before, after) {
+             var formatters = init_formatters.slice().concat(after.formatters || []);
+             $.terminal.defaults.formatters = formatters;
+             formatters_stack.push(formatters);
+         },
+         onPop: function(before, after) {
+             formatters_stack.pop();
+             if (formatters_stack.length > 0) {
+                 var last = formatters_stack[formatters_stack.length-1];
+                 $.terminal.defaults.formatters = last;
+             }
+         },
          greetings: 'jsh shell',
          prompt: 'password: ',
          onInit: function(term) {
