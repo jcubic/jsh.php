@@ -16,7 +16,8 @@ $config = array(
     'password' => 'admin',
     'root' => getcwd(),
     'storage' => true,
-    'is_windows' => strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'
+    'is_windows' => strtoupper(substr(PHP_OS, 0, 3)) === 'WIN',
+    'compgen' => true // should shell run compgen it may trigger SELinux error/warning
 );
 
 class App {
@@ -219,7 +220,7 @@ class App {
     }
     // ------------------------------------------------------------------------
     public function executables() {
-        if (!$this->config->is_windows) {
+        if (!$this->config->is_windows && $this->config->compgen) {
             $command = "compgen -A function -abck | sort | uniq";
             $result = $this->shell($command);
             $commands = explode("\n", trim($result['output']));
@@ -227,6 +228,7 @@ class App {
                 return strlen($command) > 1; // filter out . : [
             }));
         }
+        return array();
     }
     // ------------------------------------------------------------------------
     public function shell($code) {
@@ -387,7 +389,10 @@ body {
                      }
                      break;
                  case 'number':
-                     term.echo('Query OK, ' + result + ' row' + (result != 1 ? 's' : '') + ' affected');
+                     term.echo('Query OK, ' + result + ' row' + (result != 1 ? 's' : '') + ' affected', {
+                         formatters: false
+                     });
+                     break;
                  default:
                      // should not happen
                      term.echo(result);
@@ -483,6 +488,9 @@ body {
          }
          // ----------------------------------------------------------------------------------------
          function values(arr) {
+             if (!arr.length) {
+                 return arr;
+             }
              var keys = Object.keys(arr[0]);
              return arr.map(function(row) {
                  return Object.keys(row).map(function(key) {
