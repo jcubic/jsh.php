@@ -1,13 +1,13 @@
 <?php
 /*
- * Single file, terminal like php shell version 0.2.0
+ * Single file, terminal like php shell version 0.2.1
  *
  * https://github.com/jcubic/jsh.php
  *
  * Copyright (c) 2017-2018 Jakub Jankiewicz <https://jcubic.pl/me>
  * Released under the MIT license
  */
-define('VERSION', '0.2.0');
+define('VERSION', '0.2.1');
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE);
@@ -17,8 +17,7 @@ $config = array(
     'password' => 'admin',
     'root' => getcwd(),
     'storage' => true,
-    'is_windows' => strtoupper(substr(PHP_OS, 0, 3)) === 'WIN',
-    'compgen' => true // should shell run compgen it may trigger SELinux error/warning
+    'is_windows' => strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'
 );
 
 class App {
@@ -221,8 +220,10 @@ class App {
     }
     // ------------------------------------------------------------------------
     public function executables() {
-        if (!$this->config->is_windows && $this->config->compgen) {
-            $command = "compgen -A function -abck | sort | uniq";
+        if (!$this->config->is_windows) {
+            $command = 'IFS=":";for i in $PATH; do test -d "$i" && find "$i" ' .
+                       '-maxdepth 1 -executable -type f -exec basename {} \;;' .
+                       'done | sort | uniq';
             $result = $this->shell($command);
             $commands = explode("\n", trim($result['output']));
             return array_values(array_filter($commands, function($command) {
@@ -252,9 +253,18 @@ function password_set() {
     return isset($config['password']) && $config['password'] != '';
 }
 session_start();
+
+$path = isset($_POST['path']) ? $_POST['path'] : $config['root'];
+$app = new App($config['root'], $path, $config);
+try {
+    $config['executables'] = $app->executables();
+} catch(Exception $e) {
+    $config['executables'] = array();
+}
+
 if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
     $_SERVER['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest' && isset($_POST['action'])) {
-    $path = isset($_POST['path']) ? $_POST['path'] : $config['root'];
+
     if (!file_exists('.bashrc')) {
         $bashrc = <<<EOF
 shopt -s expand_aliases
@@ -274,14 +284,6 @@ EOF;
         $f = fopen('.bashrc', 'w');
         fwrite($f, $bashrc);
         fclose($f);
-    }
-
-    $app = new App($config['root'], $path, $config);
-
-    try {
-        $config['executables'] = @$app->executables();
-    } catch(Exception $e) {
-        $config->executables = array();
     }
 
     header('Content-Type: application/json');
@@ -695,7 +697,7 @@ body {
          (function(push) {
              refresh_dir().then(push);
          })(function() {
-             term.set_mask(false).push(function(command) {
+             term.resume().set_mask(false).push(function(command) {
                  var cmd = $.terminal.parse_command(command);
                  console.log(cmd);
                  if (typeof commands[cmd.name] == 'function') {
@@ -748,7 +750,6 @@ body {
                                  }));
                              });
                          } else if (command.match(re) || command === '') {
-                             var commands = Object.keys(leash.commands);
                              callback(builtins.concat(execs));
                          } else {
                              var m = string.match(/(.*)\/([^\/]+)/);
@@ -835,7 +836,7 @@ body {
                  init(term);
              }
          }
-     });
+     }).pause();
  });
 </script>
 </body>

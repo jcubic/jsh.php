@@ -1,4 +1,4 @@
-## jsh.php version 0.2.0
+## jsh.php version 0.2.1
 
 Single file, terminal like php shell
 
@@ -9,10 +9,12 @@ sqlite, mysql command with syntax highlight and tab completion
 ## Limitations
 
 * Windows support is limited, you can run shell commands but it run normal cmd process (no powershell)
-* tab completion work for commands in the system works only on Unix systems (compgen required) and it may
-  trigger SELinux warning/error use with caution.
+* tab completion for commands in the system works only on Unix systems.
 
 ## Changelog
+
+### 0.2.1
+* fix SELinux trigger by running compgen
 
 ### 0.2.0
 * sqlite and mysql commands
