@@ -4,7 +4,7 @@
  *
  * https://github.com/jcubic/jsh.php
  *
- * Copyright (c) 2017-2018 Jakub Jankiewicz <https://jcubic.pl/me>
+ * Copyright (c) 2017-2019 Jakub Jankiewicz <https://jcubic.pl/me>
  * Released under the MIT license
  */
 define('VERSION', '0.2.1');
@@ -160,6 +160,12 @@ class App {
         $command = escapeshellarg($pre . $command . $post);
         $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
         $result = $this->$shell_fn($command);
+        /*
+        return array(
+            'output' => $command,
+            'cwd' => $this->path
+        );
+        */
         if (preg_match("%>/dev/null & echo $!$%", $command)) {
             return array(
                 'output' => '[1] ' . $result,

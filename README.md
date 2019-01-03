@@ -25,5 +25,5 @@ sqlite, mysql command with syntax highlight and tab completion
 
 Released under [MIT](http://opensource.org/licenses/MIT) license
 
-Copyright (c) 2017-2018 [Jakub Jankiewicz](https://jcubic.pl/jakub-jankiewicz)
+Copyright (c) 2017-2019 [Jakub Jankiewicz](https://jcubic.pl/jakub-jankiewicz)
 
