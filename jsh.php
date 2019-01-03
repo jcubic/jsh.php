@@ -158,7 +158,7 @@ class App {
         $pre = ". .bashrc\nexport HOME=\"$home\"\ncd $path;\n";
         $post = ";echo -n \"$marker\";pwd";
         $command = escapeshellarg($pre . $command . $post);
-        $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
+        $command = $this->unbuffer('/bin/bash -xc ' . $command . ' 2>&1', $shell_fn);
         $result = $this->$shell_fn($command);
         /*
         return array(
@@ -705,7 +705,6 @@ body {
          })(function() {
              term.resume().set_mask(false).push(function(command) {
                  var cmd = $.terminal.parse_command(command);
-                 console.log(cmd);
                  if (typeof commands[cmd.name] == 'function') {
                      commands[cmd.name](cmd);
                  } else {
@@ -714,7 +713,7 @@ body {
                          if (data.error) {
                              term.error(data.error).resume();
                          } else {
-                             term.echo(data.output.trim());
+                             term.echo(data.output.trim(), {exec: false});
                              cwd = data.cwd;
                              refresh_dir().then(term.resume);
                          }

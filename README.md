@@ -13,6 +13,9 @@ sqlite, mysql command with syntax highlight and tab completion
 
 ## Changelog
 
+### 0.2.2
+* fix error from running compgen command as shell command (disable exec in jQuery Terminal echo method)
+
 ### 0.2.1
 * fix SELinux trigger by running compgen
 
