@@ -158,7 +158,7 @@ class App {
         $pre = ". .bashrc\nexport HOME=\"$home\"\ncd $path;\n";
         $post = ";echo -n \"$marker\";pwd";
         $command = escapeshellarg($pre . $command . $post);
-        $command = $this->unbuffer('/bin/bash -xc ' . $command . ' 2>&1', $shell_fn);
+        $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
         $result = $this->$shell_fn($command);
         /*
         return array(
