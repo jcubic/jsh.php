@@ -1,4 +1,4 @@
-## jsh.php version 0.2.1
+## jsh.php version 0.2.3
 
 Single file, terminal like php shell
 
