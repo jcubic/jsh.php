@@ -1,22 +1,23 @@
 <?php
 /*
- * Single file, terminal like php shell version 0.2.1
+ * Single file, terminal like php shell version 0.3.0
  *
  * https://github.com/jcubic/jsh.php
  *
  * Copyright (c) 2017-2019 Jakub Jankiewicz <https://jcubic.pl/me>
  * Released under the MIT license
  */
-define('VERSION', '0.2.1');
+define('VERSION', '0.3.0');
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE);
 
-// leave blank or delete if don't want password protection
+
 $config = array(
-    'password' => 'admin',
+    'password' => 'admin', // leave blank or delete if don't want password protection
+    'powershell' => true, // should jsh.php use powershell on windows if supported
     'root' => getcwd(),
-    'storage' => true,
+    'storage' => true, // should save login token in localStorage
     'is_windows' => strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'
 );
 
@@ -25,6 +26,7 @@ class App {
         $this->config = (object)$config;
         $this->root = $root;
         $this->path = $path;
+        $this->marker = 'XXXX' . md5(time());
     }
     private function shell_exec($code) {
         return shell_exec($code);
@@ -35,16 +37,27 @@ class App {
         return implode("\n", $result);
     }
     // ------------------------------------------------------------------------
-    public function uniq_id() {
-        return md5(array_sum(explode(" ", microtime())) * mktime());
-    }
-    // ------------------------------------------------------------------------
     public function system($code) {
         ob_start();
         system($code);
         $result = ob_get_contents();
         ob_end_clean();
         return $result;
+    }
+    // ------------------------------------------------------------------------
+    public function uniq_id() {
+        return md5(array_sum(explode(" ", microtime())) * mktime());
+    }
+    // ------------------------------------------------------------------------
+    public function is_powershell() {
+        try {
+            $shell_fn = $this->get_shell();
+            if ($this->config->is_windows && $this->config->powershell) {
+                $ret = $this->cmd("where powershell", "/", $shell_fn);
+                return is_executable(trim($ret['output']));
+            }
+        } catch(Exeption $e) {}
+        return false;
     }
     // ------------------------------------------------------------------------
     public function mysql_close($id) {
@@ -125,40 +138,74 @@ class App {
         }
     }
     // ------------------------------------------------------------------------
+    private function powershell($command, $path, $shell_fn) {
+        $pre = "cd $path\n";
+        $post = "\necho " . $this->marker . "\$pwd.Path";
+        $command = $pre . $command . $post;
+        $file_name = "tmp.ps1";
+        file_put_contents($file_name, $command);
+        $result = $this->$shell_fn("powershell -File $file_name");
+        unlink($file_name);
+        return $this->extract_shell_output($result);
+    }
+    // ------------------------------------------------------------------------
+    private function cmd($command, $path, $shell_fn) {
+        $pre = "@echo off\ncd /D $path\n";
+        $post = "\necho " . $this->marker . "%cd%";
+        $command = $pre . $command . $post;
+        $file_name = "tmp.bat";
+        file_put_contents($file_name, $command);
+        $result = $this->$shell_fn($file_name);
+        unlink($file_name);
+        return $this->extract_shell_output($result, $path);
+    }
+    // ------------------------------------------------------------------------
+    private function extract_shell_output($result, $default, $platform = 'windows') {
+        if ($platform == 'windows') {
+            $result = sapi_windows_cp_conv(sapi_windows_cp_get('oem'), 65001, $result);
+            $output = preg_split("/\n?".$this->marker."/", $result);
+            if (count($output) == 2) {
+                $cwd = preg_replace("/\n$/", '', $output[1]);
+            } else {
+                $cwd = $default;
+            }
+            return array(
+                'output' => preg_replace("/\n$/", "", $output[0]),
+                'cwd' => trim($cwd)
+            );
+        } else {
+            // work wth `set` that return BASH_EXECUTION_STRING
+            $output = preg_split('/'.$this->marker.'(?!")/', $result);
+            if (count($output) == 2) {
+                $cwd = preg_replace("/\n$/", '', $output[1]);
+            } else {
+                $cwd = $default;
+            }
+            $output[0] = preg_replace("/\n$/", "", $output[0]);
+            return array(
+                'output' => $output[0],//preg_replace("/" . preg_quote($post) . "/", "", $output[0]),
+                'cwd' => trim($cwd)
+            );
+        }
+    }
+    // ------------------------------------------------------------------------
     public function command($command, $path, $shell_fn) {
         if (!method_exists($this, $shell_fn)) {
             throw new Exception("Invalid shell '$shell_fn'");
         }
-        $marker = 'XXXX' . md5(time());
         if ($this->config->is_windows) {
-            $pre = "@echo off\ncd /D $path\n";
-            $post = "\necho '$marker'%cd%";
-            $command = $pre . $command . $post;
-            $file_name = "tmp.bat";
-            $file = fopen($file_name, "w");
-            fwrite($file, $command);
-            fclose($file);
-            $result = preg_replace("/\r/", "", $this->$shell_fn($file_name));
-            unlink($file_name);
-            $result = sapi_windows_cp_conv(sapi_windows_cp_get('oem'), 65001, $result);
-            $output = preg_split("/\n?'".$marker."'/", $result);
-            if (count($output) == 2) {
-                $cwd = preg_replace("/\n$/", '', $output[1]);
-            } else {
-                $cwd = $path;
+            if ($this->is_powershell()) {
+                return $this->powershell($command, $path, $shell_fn);
             }
-            return array(
-                'output' => preg_replace("/\n$/", "", $output[0]),
-                'cwd' => $cwd
-            );
+            return $this->cmd($command, $path, $shell_fn);
         }
         $command = preg_replace("/&\s*$/", ' >/dev/null & echo $!', $command);
         $home = $this->root;
         $cmd_path = __DIR__;
         $pre = ". .bashrc\nexport HOME=\"$home\"\ncd $path;\n";
-        $post = ";echo -n \"$marker\";pwd";
+        $post = ';echo -n "' . $this->marker . '";pwd';
         $command = escapeshellarg($pre . $command . $post);
-        $command = $this->unbuffer('/bin/bash -xc ' . $command . ' 2>&1', $shell_fn);
+        $command = $this->unbuffer('/bin/bash -c ' . $command . ' 2>&1', $shell_fn);
         $result = $this->$shell_fn($command);
         /*
         return array(
@@ -172,18 +219,7 @@ class App {
                 'cwd' => $path
             );
         } else if ($result) {
-            // work wth `set` that return BASH_EXECUTION_STRING
-            $output = preg_split('/'.$marker.'(?!")/', $result);
-            if (count($output) == 2) {
-                $cwd = preg_replace("/\n$/", '', $output[1]);
-            } else {
-                $cwd = $path;
-            }
-            $output[0] = preg_replace("/\n$/", "", $output[0]);
-            return array(
-                'output' => preg_replace("/" . preg_quote($post) . "/", "", $output[0]),
-                'cwd' => $cwd
-            );
+            return $this->extract_shell_output($result, $path, 'unix');
         } else {
             throw new Exception("Internal error, shell function give no result");
         }
@@ -239,14 +275,19 @@ class App {
         return array();
     }
     // ------------------------------------------------------------------------
-    public function shell($code) {
+    public function get_shell() {
         $shells = array('system', 'exec', 'shell_exec');
+
         foreach ($shells as $shell) {
             if (function_exists($shell)) {
-                return $this->command($code, $this->path, $shell);
+                return $shell;
             }
         }
         throw new Exception("No valid shell found");
+    }
+    // ------------------------------------------------------------------------
+    public function shell($code) {
+        return $this->command($code, $this->path, $this->get_shell());
     }
 }
 
@@ -701,8 +742,16 @@ body {
          var builtins = Object.keys(commands);
          // ----------------------------------------------------------------------------------------
          (function(push) {
-             refresh_dir().then(push);
-         })(function() {
+             term.pause();
+             console.log('1');
+             refresh_dir().then(function() {
+                 return rpc('is_powershell').then(function(x) {
+                     console.log('u');
+                     return x;
+                 });
+             }).then(push);
+         })(function(is_powershell) {
+             console.log('x');
              term.resume().set_mask(false).push(function(command) {
                  var cmd = $.terminal.parse_command(command);
                  if (typeof commands[cmd.name] == 'function') {
@@ -721,7 +770,7 @@ body {
                  }
              }, {
                  prompt: function(set) {
-                     set(cwd + '# ');
+                     set((is_powershell ? 'PS ' : '') + cwd + '# ');
                  },
                  onExit: function() {
                      $.Storage.remove('token');
@@ -841,7 +890,7 @@ body {
                  init(term);
              }
          }
-     }).pause();
+     });
  });
 </script>
 </body>

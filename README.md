@@ -1,4 +1,4 @@
-## jsh.php version 0.2.1
+## jsh.php version 0.3.0
 
 Single file, terminal like php shell
 
@@ -12,6 +12,9 @@ sqlite, mysql command with syntax highlight and tab completion
 * tab completion for commands in the system works only on Unix systems.
 
 ## Changelog
+
+### 0.3.0
+* support for powershell on Windows
 
 ### 0.2.2
 * fix error from running compgen command as shell command (disable exec in jQuery Terminal echo method)
