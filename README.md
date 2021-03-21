@@ -1,6 +1,6 @@
 ## jsh.php version 0.2.3
 
-Single file, terminal like php shell (PHP web terminal emulator)
+[Single file, terminal like php shell (PHP web terminal emulator)](https://github.com/jcubic/jsh.php)
 
 ## Features
 
