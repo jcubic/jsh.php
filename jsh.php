@@ -1,13 +1,13 @@
 <?php
 /*
- * Single file, terminal like php shell version 0.2.3
+ * Single file, terminal like php shell version 0.2.4
  *
  * https://github.com/jcubic/jsh.php
  *
- * Copyright (c) 2017-2019 Jakub Jankiewicz <https://jcubic.pl/me>
+ * Copyright (c) 2017-2021 Jakub T. Jankiewicz <https://jcubic.pl/me>
  * Released under the MIT license
  */
-define('VERSION', '0.2.3');
+define('VERSION', '0.2.4');
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE);
