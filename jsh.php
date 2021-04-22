@@ -811,7 +811,8 @@ body {
                  }
                  init(term, data.result);
              }
-             term.resume();
+         }).catch(function(error) {
+            term.error(error.message);
          });
      }, {
          extra: {
@@ -835,13 +836,15 @@ body {
              term.set_mask(true);
              if (config.password) {
                  if (config.storage && $.Storage.get('token')) {
+                     term.pause();
                      init(term, $.Storage.get('token'));
                  }
              } else {
-                 init(term);
+                term.pause();
+                init(term);
              }
          }
-     }).pause();
+     });
  });
 </script>
 </body>
