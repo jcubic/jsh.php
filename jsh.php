@@ -334,10 +334,11 @@ EOF;
                     } else {
                         $method_object = new ReflectionMethod($class, $_POST['method']);
                         $num_got = count($params);
-                        $num_expect = $method_object->getNumberOfRequiredParameters();
-                        if ($num_got != $num_expect) {
+                        $num_required = $method_object->getNumberOfRequiredParameters();
+                        $num_all = $method_object->getNumberOfParameters();
+                        if ($num_got != $num_required && $num_got != $num_all) {
                             $msg = "Wrong number of parameters in `{$_POST['method']}' method. Got " .
-                                   "$num_got expect $num_expect";
+                                   "$num_got expect $num_required or $num_all";
                             echo json_encode(array("error" => $msg));
                         } else {
                             $result = call_user_func_array(array($app, $_POST['method']), $params);
@@ -358,6 +359,7 @@ EOF;
 <html>
 <head>
 <title>PHP Shell</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="shortcut icon" href="https://raw.githubusercontent.com/jcubic/jquery.terminal-www/master/favicon.ico"/>
 <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
 <script src="https://unpkg.com/jquery.terminal/js/jquery.terminal.min.js"></script>
