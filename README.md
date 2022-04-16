@@ -1,4 +1,4 @@
-## jsh.php version 0.2.4
+## jsh.php version 0.2.5
 
 [Single file, terminal like php shell (PHP web terminal emulator)](https://github.com/jcubic/jsh.php)
 
@@ -12,6 +12,9 @@ sqlite, mysql command with syntax highlight and tab completion
 * tab completion for commands in the system works only on Unix systems.
 
 ## Changelog
+
+### 0.2.5
+* fix optional arguments to RPC methods [#4](https://github.com/jcubic/jsh.php/issues/4)
 
 ### 0.2.4
 * fix authentication issue

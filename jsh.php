@@ -1,10 +1,10 @@
 <?php
 /*
- * Single file, terminal like php shell version 0.2.4
+ * Single file, terminal like php shell version 0.2.5
  *
  * https://github.com/jcubic/jsh.php
  *
- * Copyright (c) 2017-2021 Jakub T. Jankiewicz <https://jcubic.pl/me>
+ * Copyright (c) 2017-2022 Jakub T. Jankiewicz <https://jcubic.pl/me>
  * Released under the MIT license
  */
 define('VERSION', '0.2.4');
