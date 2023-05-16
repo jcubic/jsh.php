@@ -13,6 +13,9 @@ sqlite, mysql command with syntax highlight and tab completion
 
 ## Changelog
 
+### 0.2.6
+* fix empty command [#5](https://github.com/jcubic/jsh.php/issues/5)
+
 ### 0.2.5
 * fix optional arguments to RPC methods [#4](https://github.com/jcubic/jsh.php/issues/4)
 

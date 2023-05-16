@@ -129,6 +129,12 @@ class App {
         if (!method_exists($this, $shell_fn)) {
             throw new Exception("Invalid shell '$shell_fn'");
         }
+        if (empty(trim($command))) {
+            return array(
+                'output' => '',
+                'cwd' => $path
+            );
+        }
         $marker = 'XXXX' . md5(time());
         if ($this->config->is_windows) {
             $pre = "@echo off\ncd /D $path\n";
@@ -709,7 +715,7 @@ body {
                  var cmd = $.terminal.parse_command(command);
                  if (typeof commands[cmd.name] == 'function') {
                      commands[cmd.name](cmd);
-                 } else {
+                 } else if (command.trim()) {
                      term.pause();
                      shell(command).then(function(data) {
                          if (data.error) {
