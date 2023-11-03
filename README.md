@@ -1,4 +1,4 @@
-## jsh.php version 0.2.5
+## jsh.php version 0.2.6
 
 [Single file, terminal like php shell (PHP web terminal emulator)](https://github.com/jcubic/jsh.php)
 
