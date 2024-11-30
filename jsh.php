@@ -364,7 +364,7 @@ EOF;
 <!DOCTYPE html>
 <html>
 <head>
-<title>PHP Shell</title>
+<title>PHP+jQuery WebShell</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="shortcut icon" href="https://raw.githubusercontent.com/jcubic/jquery.terminal-www/master/favicon.ico"/>
 <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
